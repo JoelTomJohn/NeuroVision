@@ -1,18 +1,19 @@
 """
 backend/preprocessing.py
 
-NIfTI loading and preprocessing utilities for BrainTumorAI.
+NeuroVision — AI-Assisted Brain MRI Analysis
+NIfTI loading, validation, and multimodal preprocessing utilities.
 
 Supports:
-- Single NIfTI loading for the existing viewer
-- Four-modality BraTS loading for the real MONAI SegResNet model
-
-Required model order:
-T1c -> T1 -> T2 -> FLAIR
+- Single and 4-modality BraTS NIfTI loading (.nii, .nii.gz)
+- Coregistration and spatial shape verification
+- Modality order verification: T1c -> T1 -> T2 -> FLAIR
+- Bundled BraTS benchmark sample loading for demonstration and evaluation
 """
 
 from dataclasses import dataclass
-from typing import Tuple, Dict
+from pathlib import Path
+from typing import Tuple, Dict, Optional, Any
 
 import numpy as np
 
@@ -216,6 +217,88 @@ def describe_modalities_note() -> str:
     """Explain the required BraTS MRI modalities."""
 
     return (
-        "The real segmentation model requires four co-registered MRI "
-        "modalities in BraTS format: T1c, T1, T2, and FLAIR."
+        "NeuroVision requires four co-registered, skull-stripped 3D MRI "
+        "modalities in BraTS format: T1c (contrast-enhanced), T1 (native), "
+        "T2 (T2-weighted), and FLAIR (fluid-attenuated inversion recovery)."
     )
+
+
+SAMPLE_CASE_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "data"
+    / "ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData"
+    / "BraTS-GLI-00000-000"
+)
+
+
+def has_sample_case() -> bool:
+    """Check if the bundled benchmark BraTS sample case is available."""
+    if not SAMPLE_CASE_DIR.exists():
+        return False
+    required_files = [
+        "BraTS-GLI-00000-000-t1c.nii.gz",
+        "BraTS-GLI-00000-000-t1n.nii.gz",
+        "BraTS-GLI-00000-000-t2w.nii.gz",
+        "BraTS-GLI-00000-000-t2f.nii.gz",
+    ]
+    return all((SAMPLE_CASE_DIR / f).exists() for f in required_files)
+
+
+def load_sample_case() -> Tuple[np.ndarray, np.ndarray, Tuple[float, float, float], Dict[str, str], Optional[np.ndarray]]:
+    """
+    Load the bundled benchmark BraTS sample case (BraTS-GLI-00000-000).
+
+    Returns
+    -------
+    modalities : np.ndarray (4, X, Y, Z)
+        Channel order: T1c, T1, T2, FLAIR
+    affine : np.ndarray (4, 4)
+    voxel_spacing : tuple of float
+    filenames : dict of str
+    gt_seg : Optional[np.ndarray] (X, Y, Z) ground truth mask if available
+    """
+    import nibabel as nib
+
+    if not has_sample_case():
+        raise NiftiLoadError(f"Bundled sample case not found at {SAMPLE_CASE_DIR}")
+
+    t1c_path = SAMPLE_CASE_DIR / "BraTS-GLI-00000-000-t1c.nii.gz"
+    t1_path = SAMPLE_CASE_DIR / "BraTS-GLI-00000-000-t1n.nii.gz"
+    t2_path = SAMPLE_CASE_DIR / "BraTS-GLI-00000-000-t2w.nii.gz"
+    flair_path = SAMPLE_CASE_DIR / "BraTS-GLI-00000-000-t2f.nii.gz"
+    seg_path = SAMPLE_CASE_DIR / "BraTS-GLI-00000-000-seg.nii.gz"
+
+    t1c_img = nib.load(str(t1c_path))
+    t1_img = nib.load(str(t1_path))
+    t2_img = nib.load(str(t2_path))
+    flair_img = nib.load(str(flair_path))
+
+    t1c_data = np.asarray(t1c_img.get_fdata(), dtype=np.float32)
+    t1_data = np.asarray(t1_img.get_fdata(), dtype=np.float32)
+    t2_data = np.asarray(t2_img.get_fdata(), dtype=np.float32)
+    flair_data = np.asarray(flair_img.get_fdata(), dtype=np.float32)
+
+    modalities = np.stack([t1c_data, t1_data, t2_data, flair_data], axis=0)
+
+    try:
+        voxel_spacing = tuple(float(v) for v in t1c_img.header.get_zooms()[:3])
+    except Exception:
+        voxel_spacing = (1.0, 1.0, 1.0)
+
+    filenames = {
+        "t1c": t1c_path.name,
+        "t1": t1_path.name,
+        "t2": t2_path.name,
+        "flair": flair_path.name,
+        "case_id": "BraTS-GLI-00000-000",
+    }
+
+    gt_seg = None
+    if seg_path.exists():
+        try:
+            gt_img = nib.load(str(seg_path))
+            gt_seg = np.asarray(gt_img.get_fdata(), dtype=np.float32)
+        except Exception:
+            gt_seg = None
+
+    return modalities, t1c_img.affine, voxel_spacing, filenames, gt_seg
