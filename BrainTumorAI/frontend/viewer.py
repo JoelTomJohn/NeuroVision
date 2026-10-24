@@ -13,16 +13,30 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from frontend.styles import COLORS, REGION_COLORS
+from frontend.components import render_panel_label
 
 
-def get_axial_slice(volume: np.ndarray, slice_index: int) -> np.ndarray:
+def get_axial_slice(
+    volume: np.ndarray,
+    slice_index: int,
+    is_mask: bool = False,
+) -> np.ndarray:
     """
     Extract a single 2D axial slice from a 3D MRI volume, normalized to 0-255
     and rotated to standard radiological orientation (superior at top).
-    """
-    slice_index = int(np.clip(slice_index, 0, volume.shape[2] - 1))
-    img = volume[:, :, slice_index].astype(np.float32)
 
+    If is_mask is True or array has integer/boolean dtype, normalization is bypassed
+    to preserve exact discrete label values.
+    """
+    if volume is None:
+        return None
+    slice_index = int(np.clip(slice_index, 0, volume.shape[2] - 1))
+    slice_2d = volume[:, :, slice_index]
+
+    if is_mask or np.issubdtype(volume.dtype, np.integer) or np.issubdtype(volume.dtype, np.bool_):
+        return np.rot90(slice_2d)
+
+    img = slice_2d.astype(np.float32)
     img_min, img_max = np.nanmin(img), np.nanmax(img)
     if img_max - img_min > 1e-6:
         img = (img - img_min) / (img_max - img_min) * 255.0
@@ -30,6 +44,21 @@ def get_axial_slice(volume: np.ndarray, slice_index: int) -> np.ndarray:
         img = np.zeros_like(img)
 
     return np.rot90(img)
+
+
+def get_mask_slice(
+    volume: Optional[np.ndarray],
+    slice_index: int,
+) -> Optional[np.ndarray]:
+    """
+    Extract a single 2D axial slice from a 3D segmentation mask.
+    Preserves exact discrete integer label values (0, 1, 2, 3...) without
+    intensity normalization, and applies standard radiological rotation (rot90).
+    """
+    if volume is None:
+        return None
+    slice_index = int(np.clip(slice_index, 0, volume.shape[2] - 1))
+    return np.rot90(volume[:, :, slice_index])
 
 
 def create_overlay(
@@ -123,37 +152,42 @@ def slice_navigation_controls(
     if state_key not in st.session_state or st.session_state[state_key] is None:
         st.session_state[state_key] = peak_slice if peak_slice is not None else num_slices // 2
 
-    # Constrain within bounds
     st.session_state[state_key] = int(np.clip(st.session_state[state_key], 0, max(0, num_slices - 1)))
+    slider_key = f"{state_key}_slider"
 
     cols = st.columns([1, 6, 1, 2] if peak_slice is not None else [1, 7, 1])
 
     with cols[0]:
         if st.button("◀ Prev", key=f"{state_key}_prev", use_container_width=True):
             st.session_state[state_key] = max(0, st.session_state[state_key] - 1)
+            st.session_state[slider_key] = st.session_state[state_key]
             st.rerun()
 
     with cols[1]:
+        if slider_key not in st.session_state:
+            st.session_state[slider_key] = st.session_state[state_key]
+
         selected_slice = st.slider(
             "Axial slice",
             min_value=0,
             max_value=max(num_slices - 1, 0),
             value=int(st.session_state[state_key]),
-            key=f"{state_key}_slider",
+            key=slider_key,
             label_visibility="collapsed",
         )
-        if selected_slice != st.session_state[state_key]:
-            st.session_state[state_key] = selected_slice
+        st.session_state[state_key] = selected_slice
 
     with cols[2]:
         if st.button("Next ▶", key=f"{state_key}_next", use_container_width=True):
             st.session_state[state_key] = min(num_slices - 1, st.session_state[state_key] + 1)
+            st.session_state[slider_key] = st.session_state[state_key]
             st.rerun()
 
     if peak_slice is not None and len(cols) > 3:
         with cols[3]:
             if st.button("🎯 Peak Tumor", key=f"{state_key}_peak", use_container_width=True, help="Jump to slice with largest tumor cross-section"):
                 st.session_state[state_key] = peak_slice
+                st.session_state[slider_key] = peak_slice
                 st.rerun()
 
     st.caption(f"Axial Slice: **{st.session_state[state_key] + 1}** / {num_slices}" + (f" (Peak lesion slice: #{peak_slice + 1})" if peak_slice is not None else ""))
@@ -250,26 +284,26 @@ def render_viewer(
             )
 
     selected_mask_slice = None
+    use_composite = False
+    color = REGION_COLORS["WT"]["rgb"]
+
     if region_selection.startswith("Composite") and composite is not None:
-        selected_mask_slice = get_axial_slice(composite, slice_idx)
+        selected_mask_slice = get_mask_slice(composite, slice_idx)
         use_composite = True
     elif region_selection.startswith("Whole Tumor") and region_masks and "WT" in region_masks:
-        selected_mask_slice = get_axial_slice(region_masks["WT"], slice_idx)
+        selected_mask_slice = get_mask_slice(region_masks["WT"], slice_idx)
         use_composite = False
         color = REGION_COLORS["WT"]["rgb"]
     elif region_selection.startswith("Tumor Core") and region_masks and "TC" in region_masks:
-        selected_mask_slice = get_axial_slice(region_masks["TC"], slice_idx)
+        selected_mask_slice = get_mask_slice(region_masks["TC"], slice_idx)
         use_composite = False
         color = REGION_COLORS["TC"]["rgb"]
     elif region_selection.startswith("Enhancing") and region_masks and "ET" in region_masks:
-        selected_mask_slice = get_axial_slice(region_masks["ET"], slice_idx)
+        selected_mask_slice = get_mask_slice(region_masks["ET"], slice_idx)
         use_composite = False
         color = REGION_COLORS["ET"]["rgb"]
     elif mask is not None:
-        selected_mask_slice = get_axial_slice(mask, slice_idx)
-        use_composite = False
-        color = REGION_COLORS["WT"]["rgb"]
-    else:
+        selected_mask_slice = get_mask_slice(mask, slice_idx)
         use_composite = False
         color = REGION_COLORS["WT"]["rgb"]
 
@@ -279,37 +313,55 @@ def render_viewer(
 
     elif display_mode == "Segmentation":
         if selected_mask_slice is None or not np.any(selected_mask_slice > 0):
-            st.info("No segmentation mask present on this slice.")
+            st.plotly_chart(_image_figure(np.zeros_like(mri_slice)), use_container_width=True)
+            if selected_mask_slice is None:
+                st.info("No segmentation mask available yet. Click '🔬 Run AI Brain Tumor Segmentation' above to generate predictions.")
+            else:
+                peak_note = f" Click '🎯 Peak Tumor' (slice #{peak_slice + 1}) to jump to active lesion." if peak_slice is not None else ""
+                st.caption(f"No tumor mask present on slice {slice_idx + 1}.{peak_note}")
         else:
             if use_composite:
-                seg_img = create_composite_overlay(np.zeros_like(mri_slice), selected_mask_slice)
+                seg_img = create_composite_overlay(np.zeros_like(mri_slice), selected_mask_slice, mask_alpha=1.0)
             else:
-                seg_img = create_overlay(np.zeros_like(mri_slice), selected_mask_slice, mask_color=color)
+                seg_img = create_overlay(np.zeros_like(mri_slice), selected_mask_slice, mask_color=color, mask_alpha=1.0)
             st.plotly_chart(_image_figure(seg_img), use_container_width=True)
             render_radiological_legend(region_selection.split(" ")[0])
 
     elif display_mode == "Overlay":
-        if use_composite:
-            overlay_img = create_composite_overlay(mri_slice, selected_mask_slice)
+        if selected_mask_slice is None or not np.any(selected_mask_slice > 0):
+            st.plotly_chart(_image_figure(mri_slice), use_container_width=True)
+            if selected_mask_slice is None:
+                st.caption("Showing MRI only — awaiting segmentation analysis.")
+            else:
+                peak_note = f" Click '🎯 Peak Tumor' (slice #{peak_slice + 1}) to view active tumor." if peak_slice is not None else ""
+                st.caption(f"No tumor mask on slice {slice_idx + 1} — showing original MRI.{peak_note}")
         else:
-            overlay_img = create_overlay(mri_slice, selected_mask_slice, mask_color=color)
-        st.plotly_chart(_image_figure(overlay_img), use_container_width=True)
-        render_radiological_legend(region_selection.split(" ")[0])
+            if use_composite:
+                overlay_img = create_composite_overlay(mri_slice, selected_mask_slice, mask_alpha=0.45)
+            else:
+                overlay_img = create_overlay(mri_slice, selected_mask_slice, mask_color=color, mask_alpha=0.45)
+            st.plotly_chart(_image_figure(overlay_img), use_container_width=True)
+            render_radiological_legend(region_selection.split(" ")[0])
 
     elif display_mode == "Side-by-side":
-        from frontend.components import render_panel_label
-
         left, right = st.columns(2)
         with left:
             render_panel_label("ORIGINAL MRI (FLAIR)")
             st.plotly_chart(_image_figure(mri_slice), use_container_width=True)
         with right:
-            render_panel_label("AI MULTI-REGION OVERLAY")
-            if use_composite:
-                right_img = create_composite_overlay(mri_slice, selected_mask_slice)
+            render_panel_label("AI SEGMENTATION OVERLAY")
+            if selected_mask_slice is None or not np.any(selected_mask_slice > 0):
+                st.plotly_chart(_image_figure(mri_slice), use_container_width=True)
+                if selected_mask_slice is None:
+                    st.caption("Awaiting segmentation analysis.")
+                else:
+                    st.caption(f"No tumor mask on slice {slice_idx + 1}.")
             else:
-                right_img = create_overlay(mri_slice, selected_mask_slice, mask_color=color)
-            st.plotly_chart(_image_figure(right_img), use_container_width=True)
+                if use_composite:
+                    right_img = create_composite_overlay(mri_slice, selected_mask_slice, mask_alpha=0.45)
+                else:
+                    right_img = create_overlay(mri_slice, selected_mask_slice, mask_color=color, mask_alpha=0.45)
+                st.plotly_chart(_image_figure(right_img), use_container_width=True)
         render_radiological_legend(region_selection.split(" ")[0])
 
 

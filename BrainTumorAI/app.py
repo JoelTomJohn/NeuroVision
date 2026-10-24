@@ -40,6 +40,7 @@ from frontend.viewer import (
     render_viewer,
     create_3d_visualization,
     get_axial_slice,
+    get_mask_slice,
     create_composite_overlay,
 )
 from backend.preprocessing import (
@@ -947,7 +948,7 @@ def page_report():
                         import io
                         from PIL import Image as PILImage
                         mri_slice = get_axial_slice(volume, peak_idx)
-                        comp_slice = get_axial_slice(composite, peak_idx)
+                        comp_slice = get_mask_slice(composite, peak_idx)
                         overlay_rgb = create_composite_overlay(mri_slice, comp_slice)
                         pil_img = PILImage.fromarray(overlay_rgb)
                         b_buf = io.BytesIO()

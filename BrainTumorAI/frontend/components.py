@@ -56,6 +56,11 @@ def render_section_heading(text: str, icon: str = "") -> None:
     st.markdown(f'<div class="section-title">{icon_str}{text}</div>', unsafe_allow_html=True)
 
 
+def render_panel_label(text: str) -> None:
+    """Render a styled header label for side-by-side radiological viewer panels."""
+    st.markdown(f'<div class="panel-label">{text}</div>', unsafe_allow_html=True)
+
+
 def render_disclaimer(text: Optional[str] = None) -> None:
     """Render discreet responsible-use disclaimer."""
     default_text = (
