@@ -1,7 +1,89 @@
+# ==============================================================================
+# NeuroVision — Git Ignore Policy
+# ==============================================================================
+
+# Virtual Environments
 venv/
+env/
+.venv/
 **/venv/
+**/env/
+**/.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Bytecode & Compilation Caches
 __pycache__/
 **/__pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# Testing & Coverage Artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Streamlit Local Configuration & Secrets
+.streamlit/secrets.toml
+.streamlit/config.toml
+*.streamlit/secrets.toml
+
+# Environment Variables & Private Credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.cert
+
+# Cache & Temporary Directories
 .cache/
 **/.cache/
+.monai/
+**/.monai/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# Operating System & IDE Clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Runtime Generated Reports & Outputs (Preserve documentation & placeholders)
+outputs/*.pdf
+outputs/*.png
+outputs/*.nii.gz
+BrainTumorAI/outputs/*.pdf
+BrainTumorAI/outputs/*.png
+BrainTumorAI/outputs/*.nii.gz
+!outputs/README.md
+!outputs/.gitkeep
+!BrainTumorAI/outputs/README.md
+!BrainTumorAI/outputs/.gitkeep
+
+# MRI Patient Data Protection
+# Protect against accidental commits of raw clinical scans or external cohorts.
+# Preserves only the verified open benchmark sample BraTS-GLI-00000-000.
+data/*
+!data/.gitkeep
+!data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/
+data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/*
+!data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/BraTS-GLI-00000-000/
+BrainTumorAI/data/*
+!BrainTumorAI/data/.gitkeep
+!BrainTumorAI/data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/
+BrainTumorAI/data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/*
+!BrainTumorAI/data/ASNR-MICCAI-BraTS2023-GLI-Challenge-TrainingData/BraTS-GLI-00000-000/
