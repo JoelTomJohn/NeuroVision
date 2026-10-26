@@ -33,9 +33,11 @@ flowchart TD
         Composite["Composite Multiclass Mask\n(0:BG, 1:NCR, 2:ED, 3:ET)"]
     end
 
-    subgraph AnalysisTier ["Analytics & Reporting (backend/)"]
+    subgraph AnalysisTier ["Analytics, Explainability & Reporting (backend/)"]
         Morph["analysis.py:\nVolumetric (cm³) & Bounding Box (mm)"]
         Conf["analysis.py:\nVoxel Probability Heatmap Statistics"]
+        XAI["explainability.py:\nShannon Boundary Entropy & Modality Occlusion"]
+        Batch["batch_eval.py:\nMulti-Subject Batch Evaluation (CSV/JSON)"]
         Dice["analysis.py:\nGround-Truth Dice DSC Verification"]
         PDF["report.py:\nReportLab Clinical PDF Compilation"]
     end
@@ -151,3 +153,21 @@ From these, mutually disjoint clinical sub-regions are derived:
   - Embedded high-resolution axial key-slice image.
   - Prominent investigational research disclaimer.
 - Compiles directly to an in-memory `io.BytesIO` buffer, enabling zero-disk-dependency downloads in Streamlit.
+
+---
+
+### 6. Explainability & Uncertainty Engine (`backend/explainability.py`)
+
+- **Shannon Boundary Entropy ($H$):** Computes normalized voxel-wise multi-label Shannon entropy across predicted sigmoid probabilities:
+  $$H(x) = -\frac{1}{C}\sum_{c=1}^C \left[ p_c(x) \log_2(p_c(x) + \epsilon) + (1-p_c(x)) \log_2(1-p_c(x) + \epsilon) \right]$$
+  Highlights decision boundary ambiguity ($H = 1.0$ at $p = 0.5$; $H = 0.0$ at $p \in \{0, 1\}$), isolating infiltrative edema margins and boundary transitions where partial volume effects create uncertainty.
+- **Modality Occlusion Sensitivity:** Algorithmic channel ablation engine assessing individual sequence attribution (T1c, T1, T2, FLAIR) by systematic occlusion and volume delta tracking ($\Delta V$) across WT, TC, and ET (*backend algorithmic implementation; not rendered in Streamlit UI*).
+- **Boundary Uncertainty Metrics:** Summarizes mean boundary entropy, peak boundary entropy, and high-ambiguity voxel fraction ($0.4 \le p \le 0.6$).
+
+---
+
+### 7. Multi-Patient Batch Evaluation Engine (`backend/batch_eval.py`)
+
+- **Cohort Discovery:** Automatically scans directories for BraTS-formatted cases, validating required modalities (`T1c`, `T1`, `T2`, `FLAIR`, `Seg`).
+- **Standardized Metrics:** Computes per-case Dice similarity coefficients for Whole Tumor, Tumor Core, and Enhancing Tumor conforming to BraTS challenge rules (strict empty-mask handling: $GT=0 \land P=0 \implies 1.0$; $GT=0 \land P>0 \implies 0.0$).
+- **Export & Summary:** Generates machine-readable CSV (`outputs/batch_evaluation_results.csv`) and JSON summary statistics (`outputs/batch_evaluation_summary.json`) reporting cohort-level mean, std, median, min, and max.

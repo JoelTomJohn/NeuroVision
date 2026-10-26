@@ -760,7 +760,23 @@ def page_confidence():
     st.write("")
 
     # Spatial Heatmap Slice Viewer
-    render_section_heading("Spatial Probability Heatmap", "🗺️")
+    render_section_heading("Spatial Probability & Boundary Uncertainty Maps", "🗺️")
+
+    entropy_map = results.get("entropy_map")
+    explainability = results.get("explainability") or {}
+
+    col_map_type, col_space = st.columns([2, 1])
+    with col_map_type:
+        map_type = st.radio(
+            "Visualization Mode:",
+            [
+                "🎯 Sigmoid Probability Heatmap (Model Activation Proxy)",
+                "🔀 Shannon Boundary Entropy (Decision Ambiguity & Uncertainty)",
+            ],
+            index=0,
+            horizontal=True,
+            key="conf_map_type_selector",
+        )
 
     num_slices = volume.shape[2]
     slice_idx = st.session_state.get("current_slice") or (num_slices // 2)
@@ -774,17 +790,31 @@ def page_confidence():
     )
     st.session_state["current_slice"] = slice_idx
 
-    conf_slice = np.rot90(conf_map[:, :, slice_idx])
-
     import plotly.graph_objects as go
+
+    if "Shannon" in map_type and entropy_map is not None:
+        heat_slice = np.rot90(entropy_map[:, :, slice_idx])
+        colorscale = "Plasma"
+        cbar_title = "Entropy (Bits)"
+        caption_text = (
+            "Plasma color scale: 0.0 (high model certainty, p≈0 or p≈1) to 1.0 (maximal decision ambiguity, p≈0.5 at boundary)."
+        )
+    else:
+        heat_slice = np.rot90(conf_map[:, :, slice_idx])
+        colorscale = "Viridis"
+        cbar_title = "Probability"
+        caption_text = (
+            "Viridis color scale: 0.0 (background / low probability) to 1.0 (highest model activation)."
+        )
+
     fig_heat = go.Figure(
         data=go.Heatmap(
-            z=conf_slice,
-            colorscale="Viridis",
+            z=heat_slice,
+            colorscale=colorscale,
             zmin=0.0,
             zmax=1.0,
             colorbar=dict(
-                title=dict(text="Probability", font=dict(color="#FFFFFF", size=11)),
+                title=dict(text=cbar_title, font=dict(color="#FFFFFF", size=11)),
                 tickfont=dict(color="#F8FAFC"),
                 outlinecolor="rgba(30,47,77,0.8)",
             ),
@@ -800,7 +830,37 @@ def page_confidence():
     fig_heat.update_yaxes(visible=False)
 
     st.plotly_chart(fig_heat, use_container_width=True)
-    st.caption("Viridis color scale: 0.0 (background/low probability) to 1.0 (highest model confidence).")
+    st.caption(caption_text)
+
+    # If explainability entropy metrics are available, render an uncertainty summary
+    if explainability and explainability.get("available"):
+        st.write("")
+        render_section_heading("Boundary Uncertainty Diagnostics (Shannon Entropy)", "🔀")
+        render_metric_row([
+            {
+                "label": "Mean Boundary Entropy",
+                "value": explainability.get("mean_boundary_entropy", "—"),
+                "unit": "bits",
+                "subtext": "Average voxel ambiguity across lesion",
+                "is_demo": is_demo,
+                "accent_color": COLORS["accent_teal"],
+            },
+            {
+                "label": "Peak Boundary Entropy",
+                "value": explainability.get("peak_boundary_entropy", "—"),
+                "unit": "bits",
+                "subtext": "Maximal boundary uncertainty",
+                "is_demo": is_demo,
+            },
+            {
+                "label": "High-Ambiguity Fraction",
+                "value": explainability.get("ambiguity_fraction_pct", "—"),
+                "unit": "%",
+                "subtext": "Voxels near decision threshold (0.4≤p≤0.6)",
+                "is_demo": is_demo,
+            },
+        ])
+
 
     st.write("")
 
@@ -832,6 +892,12 @@ def page_confidence():
                     <br>• The model assumes co-registered, skull-stripped volumes resampled to 1mm³ isotropic resolution.
                     <br>• Variations across 1.5T vs 3.0T scanner field strengths, head coils, or motion artifacts can introduce boundary uncertainty.
                     <br>• NeuroVision does NOT predict genetic mutations (e.g. IDH status, 1p/19q codeletion), assign WHO tumor grades, or forecast patient overall survival.
+                </p>
+                <p>
+                    <b>5. Explainability vs. Probability:</b>
+                    <br>• <i>Sigmoid Probability:</i> Reflects uncalibrated output activation heuristics, not Bayesian posterior probabilities.
+                    <br>• <i>Shannon Boundary Entropy:</i> Measures spatial decision ambiguity ($H \in [0, 1]$ bits), explicitly isolating infiltrative margin transitions where the model is least confident ($p \approx 0.5$).
+                    <br>• <i>Modality Attribution:</i> Channel occlusion sensitivity evaluates how much each sequence (T1c, T1, T2, FLAIR) drives sub-region segmentation. Heatmaps must not be interpreted as causal proof.
                 </p>
             </div>
         </div>

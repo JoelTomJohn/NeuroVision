@@ -28,11 +28,15 @@ The system is fully operational on Windows 10/11 and verified on Python 3.9.5. T
 - **Hierarchical Consistency Enforcement:** Ensures clinical nesting invariants ($\text{ET} \subseteq \text{TC} \subseteq \text{WT}$).
 - **Honest Execution:** Demo Mode is set to **OFF by default**. If inference fails on an invalid scan, it returns a descriptive error rather than silently faking results.
 
-### 3. Quantitative Morphometrics & Analytics
+### 3. Quantitative Morphometrics, Explainability & Analytics
 - Computes exact tumor volume in **cubic centimeters ($\text{cm}^3$)** derived from NIfTI header voxel zooms.
 - Computes physical bounding-box dimensions ($L \times W \times H$ in $\text{mm}$) along anatomical axes.
 - Automatically calculates sub-region volume fractions (e.g. Enhancing Tumor as % of Whole Tumor).
 - Computes spatial heuristic confidence metrics (mean, min, max, standard deviation) across tumor voxels.
+- **Explainability & Boundary Uncertainty:**
+  - Dual-mode visualization in UI: Sigmoid probability heatmap (activation proxy) and Shannon boundary entropy map ($H \in [0, 1]$ bits isolating margin ambiguity).
+  - Diagnostic metrics: Mean boundary entropy, peak boundary entropy, and high-ambiguity voxel fraction ($0.4 \le p \le 0.6$).
+  - Modality occlusion sensitivity algorithm in backend (`backend/explainability.py`) assessing MRI sequence attribution to sub-regions.
 
 ### 4. Interactive Radiological Slice & 3D Viewer
 - 2D axial slice viewer with standard radiological orientation (90° clockwise rotation; patient right on viewer left).
@@ -51,6 +55,10 @@ The system is fully operational on Windows 10/11 and verified on Python 3.9.5. T
   - **Tumor Core (TC):** **0.9761** (97.6%)
   - **Enhancing Tumor (ET):** **0.9356** (93.6%)
 
+### 7. Multi-Subject Batch Evaluation Engine
+- Standalone CLI module (`backend/batch_eval.py`) for automated processing of multi-patient BraTS cohorts.
+- Automatic sequence discovery, BraTS-compliant empty-mask scoring, error handling, and CSV/JSON output.
+
 ---
 
 ## 📂 Key Files & Repository Map
@@ -66,6 +74,8 @@ NeuroVision/
 │   │   ├── preprocessing.py       # NIfTI loading, shape validation, zero-mean normalization
 │   │   ├── inference.py           # MONAI SegResNet definition, sliding-window pipeline
 │   │   ├── analysis.py            # Volumetric cm³, bounding box mm, Dice calculation
+│   │   ├── explainability.py      # Shannon boundary entropy and modality occlusion sensitivity
+│   │   ├── batch_eval.py          # Multi-patient BraTS cohort discovery and batch evaluation
 │   │   └── report.py              # ReportLab clinical PDF summary generator
 │   ├── frontend/
 │   │   ├── __init__.py
@@ -83,11 +93,12 @@ NeuroVision/
 │   │   └── README.md              # Runtime directory for generated PDF reports
 │   └── tests/
 │       ├── __init__.py
-│       ├── test_units.py          # 12 automated unit tests (preproc, analysis, report, viewer)
+│       ├── test_units.py          # 19 automated unit tests (preproc, analysis, xai, batch, report, viewer)
 │       └── test_benchmark.py      # Genuine SegResNet benchmark test vs ground-truth
 ├── docs/
 │   ├── SETUP.md                   # Comprehensive Windows installation & launch instructions
 │   ├── ARCHITECTURE.md            # System architecture, deep learning pipeline, data flow
+│   ├── ACADEMIC_AUDIT_AND_SPECIFICATION.md # Academic audit, math spec, and evaluation
 │   ├── TESTING.md                 # Verification test results, actual logs, known boundaries
 │   └── MENTOR_HANDOVER.md         # This document
 ├── .gitignore                     # Git exclusion rules (venv, secrets, cache, large datasets)

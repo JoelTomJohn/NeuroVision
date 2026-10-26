@@ -21,8 +21,8 @@ This document records the automated and manual testing procedures, commands, act
 | :--- | :--- | :---: | :---: | :--- |
 | **1. Syntax Compilation** | `app.py`, `backend/*.py`, `frontend/*.py` | **PASSED** | < 1.0s | Zero syntax errors across 10 Python files |
 | **2. Dependency Imports** | PyTorch, MONAI, NiBabel, ReportLab, Streamlit | **PASSED** | 3.2s | All 10 package dependencies resolved cleanly |
-| **3. Core Unit Tests** | Preprocessing, Analysis, Viewer, Report, Demo Mode | **PASSED** | 1.4s | 12 tests executed via `unittest`, 0 failures |
-| **4. Benchmark DSC Verification** | Real MONAI SegResNet on `BraTS-GLI-00000-000` | **PASSED** | 91.96s | WT Dice: 0.9182, TC Dice: 0.9761, ET Dice: 0.9356 |
+| **3. Core Unit Tests** | Preprocessing, Analysis, Explainability, Batch Eval, Viewer, Report, Demo Mode | **PASSED** | 1.2s | 19 tests executed via `unittest`, 0 failures |
+| **4. Benchmark DSC Verification** | Real MONAI SegResNet on `BraTS-GLI-00000-000` | **PASSED** | 80.66s | WT Dice: 0.9182, TC Dice: 0.9761, ET Dice: 0.9356 |
 | **5. Application Server Health** | Streamlit Web Engine (`http://localhost:8501`) | **PASSED** | Instant | Process 9016 active; `/_stcore/health` returned HTTP 200 `ok` |
 | **6. Automated Browser Test** | Playwright Driver Subagent | **NOT RUN** | — | Remote driver mirror returned 404; manual browser UI verified |
 
@@ -43,7 +43,7 @@ print('All syntax checks passed!')
 ```
 **Output:**
 ```
-Checking files: ['app.py', 'backend\\analysis.py', 'backend\\inference.py', 'backend\\preprocessing.py', 'backend\\report.py', 'backend\\__init__.py', 'frontend\\components.py', 'frontend\\styles.py', 'frontend\\viewer.py', 'frontend\\__init__.py']
+Checking files: ['app.py', 'backend\\analysis.py', 'backend\\inference.py', 'backend\\preprocessing.py', 'backend\\report.py', 'backend\\explainability.py', 'backend\\batch_eval.py', 'backend\\__init__.py', 'frontend\\components.py', 'frontend\\styles.py', 'frontend\\viewer.py', 'frontend\\__init__.py']
 All syntax checks passed!
 ```
 
@@ -56,6 +56,7 @@ All syntax checks passed!
 python -c "
 import streamlit, plotly, numpy, nibabel, pandas, reportlab, torch, monai, scipy, PIL
 import backend.preprocessing as pp, backend.inference as inf, backend.analysis as an, backend.report as rep
+import backend.explainability as xai, backend.batch_eval as be
 import frontend.components as comp, frontend.styles as sty, frontend.viewer as vw
 print('All backend and frontend modules imported successfully!')
 print('Model available:', inf.is_model_available())
@@ -94,17 +95,24 @@ test_calculate_confidence (tests.test_units.TestAnalysis) ... ok
 test_calculate_dice_score (tests.test_units.TestAnalysis) ... ok
 test_calculate_empty_mask (tests.test_units.TestAnalysis) ... ok
 test_calculate_single_mask_measurements (tests.test_units.TestAnalysis) ... ok
+test_cohort_statistics_calculation (tests.test_units.TestBatchEvaluation) ... ok
+test_discover_patient_cases_sample (tests.test_units.TestBatchEvaluation) ... ok
+test_evaluate_missing_files_case (tests.test_units.TestBatchEvaluation) ... ok
+test_boundary_entropy_invalid_shape (tests.test_units.TestExplainability) ... ok
+test_boundary_entropy_map_math (tests.test_units.TestExplainability) ... ok
+test_summarize_explainability_diagnostics (tests.test_units.TestExplainability) ... ok
 test_demo_mode_inference (tests.test_units.TestModelCheckpoint) ... ok
 test_model_availability (tests.test_units.TestModelCheckpoint) ... ok
 test_basic_normalize (tests.test_units.TestPreprocessing) ... ok
 test_has_sample_case (tests.test_units.TestPreprocessing) ... ok
 test_load_sample_case (tests.test_units.TestPreprocessing) ... ok
+test_report_generation_empty_measurements (tests.test_units.TestReportEdgeCases) ... ok
 test_generate_pdf_report (tests.test_units.TestReportGeneration) ... ok
 test_get_axial_slice (tests.test_units.TestViewerUtilities) ... ok
 test_get_mask_slice_preserves_labels (tests.test_units.TestViewerUtilities) ... ok
 
 ----------------------------------------------------------------------
-Ran 12 tests in 1.407s
+Ran 19 tests in 1.227s
 
 OK
 ```

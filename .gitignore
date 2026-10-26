@@ -66,9 +66,15 @@ desktop.ini
 outputs/*.pdf
 outputs/*.png
 outputs/*.nii.gz
+outputs/*.npz
+outputs/*.csv
+outputs/*.json
 BrainTumorAI/outputs/*.pdf
 BrainTumorAI/outputs/*.png
 BrainTumorAI/outputs/*.nii.gz
+BrainTumorAI/outputs/*.npz
+BrainTumorAI/outputs/*.csv
+BrainTumorAI/outputs/*.json
 !outputs/README.md
 !outputs/.gitkeep
 !BrainTumorAI/outputs/README.md

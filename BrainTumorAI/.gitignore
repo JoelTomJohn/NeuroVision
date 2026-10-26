@@ -66,6 +66,9 @@ desktop.ini
 outputs/*.pdf
 outputs/*.png
 outputs/*.nii.gz
+outputs/*.npz
+outputs/*.csv
+outputs/*.json
 !outputs/README.md
 !outputs/.gitkeep
 

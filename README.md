@@ -48,10 +48,13 @@ Powered by a deep learning **MONAI SegResNet** (3D residual encoder-decoder) arc
    - Physical orthogonal bounding-box dimensions ($L \times W \times H$ in $\text{mm}$) along anatomical planes.
    - Sub-compartment volume fractions (Enhancing Tumor % and Tumor Core % relative to Whole Tumor).
 
-4. **Honest Confidence & Explainability:**
-   - Spatial voxel-wise probability heatmap rendered via Plotly.
-   - Summary statistics (Mean, Min, Max, and Standard Deviation) across predicted tumor voxels.
-   - Transparent disclosure distinguishing spatial heuristic probability activations from Bayesian calibrated posterior uncertainty.
+4. **Explainability & Boundary Uncertainty Diagnostics:**
+   - **Dual-Mode Interactive Heatmap Viewer:**
+     - *Sigmoid Probability Heatmap* (Viridis): Visualizes uncalibrated model activation heuristics across axial slices.
+     - *Shannon Boundary Entropy Map* (Plasma): Quantifies spatial decision ambiguity ($H \in [0, 1]$ bits), isolating infiltrative tumor margin transitions where the model is least confident ($p \approx 0.5$).
+   - **Boundary Uncertainty Metrics:** Real-time summary displaying Mean Boundary Entropy, Peak Boundary Entropy, and High-Ambiguity Voxel Fraction ($0.4 \le p \le 0.6$).
+   - **Backend Modality Occlusion Sensitivity:** Channel ablation sensitivity engine (`backend/explainability.py`) assessing individual sequence attribution (T1c, T1, T2, FLAIR) to tumor sub-regions (*backend algorithmic implementation; not rendered in Streamlit UI*).
+   - **Rigorous Methodological Distinction:** Explicitly distinguishes raw heuristic output probabilities and boundary ambiguity maps from true Bayesian calibrated epistemic confidence.
 
 5. **Interactive 3D Volumetric Point Cloud:**
    - Hardware-accelerated 3D point cloud rendered via Plotly `Scatter3d`.
@@ -64,6 +67,10 @@ Powered by a deep learning **MONAI SegResNet** (3D residual encoder-decoder) arc
 7. **One-Click Benchmark Demonstration:**
    - Pre-bundled benchmark patient scan (`BraTS-GLI-00000-000`) for instantaneous testing without external file uploads.
    - Ground-truth evaluation module calculating real Dice Similarity Coefficients against expert neuroradiologist annotations.
+
+8. **Multi-Patient Batch Evaluation Engine (`backend/batch_eval.py`):**
+   - Automated CLI pipeline for batch evaluation across external multi-patient BraTS cohorts.
+   - Automatic NIfTI modality discovery, hierarchical consistency verification, BraTS challenge-compliant Dice scoring (with strict empty-mask handling), and CSV/JSON export.
 
 ---
 
@@ -78,7 +85,7 @@ NeuroVision deploys a 3D residual encoder-decoder network from the **MONAI** fra
 - **Base Filters:** 16 initial convolution filters
 - **Encoder Blocks:** `(1, 2, 2, 4)` with residual skip connections and 0.2 dropout
 - **Decoder Blocks:** `(1, 1, 1)` with upsampling convolutions
-- **Pretrained Weights:** `models/model.pt` (17.97 MB)
+- **Pretrained Weights:** `models/model.pt` (17.97 MB PyTorch state dict, pretrained on the BraTS challenge cohort; no local training runs or epoch loss records were created in this repository)
 - **Inference Strategy:** 3D sliding-window inference (`roi_size=(240, 240, 160)`, `overlap=0.5`, Gaussian importance weighting)
 - **Hardware Optimization:** Verified on CPU execution (~45–90s); automatically leverages NVIDIA CUDA GPU acceleration when available.
 
@@ -86,13 +93,15 @@ NeuroVision deploys a 3D residual encoder-decoder network from the **MONAI** fra
 
 ## 🏆 Verified Benchmark Performance
 
-Evaluated against expert neuroradiologist ground truth on benchmark scan `BraTS-GLI-00000-000`:
+Evaluated against expert neuroradiologist ground truth on the bundled benchmark scan `BraTS-GLI-00000-000`:
 
 | Sub-Region | Clinical Definition | Predicted Voxels | Ground-Truth Voxels | Dice Similarity Coefficient (DSC) | Agreement |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **WT** | Whole Tumor (Edema + Core + Enhancing) | 63,522 | 57,305 | **0.9182** | **91.8%** |
 | **TC** | Tumor Core (Necrotic + Enhancing) | 43,546 | 44,469 | **0.9761** | **97.6%** |
 | **ET** | Enhancing Tumor (Active rim) | 30,473 | 32,731 | **0.9356** | **93.6%** |
+
+*Methodological Note: Single-subject evaluation verifies pipeline reproducibility and numerical correctness. It does not constitute statistical clinical evidence of performance across diverse multi-center patient populations.*
 
 ---
 
@@ -119,7 +128,13 @@ NeuroVision/
 │   ├── app.py                     # Main Streamlit application and multi-page routing
 │   ├── requirements.txt           # Python dependencies pinned with minimum versions
 │   ├── run_tests.py               # Test runner CLI (--fast, --all)
-│   ├── backend/                   # Preprocessing, MONAI inference, analysis, reporting
+│   ├── backend/                   # Preprocessing, MONAI inference, analysis, reporting, XAI
+│   │   ├── preprocessing.py       # NIfTI loading, shape validation, non-zero normalization
+│   │   ├── inference.py           # MONAI SegResNet definition, sliding-window inference
+│   │   ├── analysis.py            # Volumetric cm³, bounding box mm, Dice calculation
+│   │   ├── explainability.py      # Shannon boundary entropy and modality occlusion sensitivity
+│   │   ├── batch_eval.py          # Multi-patient BraTS cohort discovery and batch evaluation
+│   │   └── report.py              # ReportLab clinical PDF summary generator
 │   ├── frontend/                  # Viewer, UI components, styling
 │   ├── models/                    # Model checkpoint (model.pt) and specification
 │   ├── data/                      # Bundled BraTS benchmark sample (BraTS-GLI-00000-000)
@@ -129,7 +144,8 @@ NeuroVision/
 │   ├── SETUP.md                   # Windows setup & installation guide
 │   ├── ARCHITECTURE.md            # Technical architecture and data flow specification
 │   ├── TESTING.md                 # Complete verification test results and logs
-│   └── MENTOR_HANDOVER.md         # Mentor handover dossier and roadmap
+│   ├── MENTOR_HANDOVER.md         # Mentor handover dossier and roadmap
+│   └── ACADEMIC_AUDIT_AND_SPECIFICATION.md # Academic audit, math spec, and evaluation
 ├── .gitignore                     # Git exclusion rules
 └── README.md                      # Primary project readme
 ```
@@ -194,8 +210,9 @@ For detailed Windows setup assistance, see [docs/SETUP.md](file:///c:/Users/thom
    - Toggle sub-region overlays (WT, TC, ET) and inspect the **Ground-Truth Benchmark Evaluation** card showing verified >91% Dice coefficients.
 5. **Tumor Analysis:**
    - Navigate to **"📊 Tumor Analysis"** to inspect volumetric measurements ($63.5\text{ cm}^3$), bounding-box dimensions ($78.0 \times 60.0 \times 63.0\text{ mm}$), and sub-region percentage ratios.
-6. **Confidence Heatmap:**
-   - Navigate to **"🎯 Confidence"** to inspect the voxel-wise probability heatmap and statistical distribution across lesion voxels.
+6. **Confidence & Boundary Uncertainty:**
+   - Navigate to **"🎯 Confidence"** to toggle between the *Sigmoid Probability Heatmap* (uncalibrated model activation proxy) and the *Shannon Boundary Entropy Map* (spatial decision boundary ambiguity).
+   - Review boundary uncertainty diagnostics: Mean Boundary Entropy, Peak Boundary Entropy, and High-Ambiguity Voxel Fraction.
 7. **3D Point Cloud:**
    - Navigate to **"🧊 3D Visualization"** to orbit, pan, and zoom the interactive 3D spatial reconstruction.
 8. **Clinical PDF Report:**
@@ -208,14 +225,14 @@ For detailed Windows setup assistance, see [docs/SETUP.md](file:///c:/Users/thom
 NeuroVision includes a dedicated test suite using Python's standard `unittest` framework:
 
 ```powershell
-# Run fast unit tests (12 tests covering preproc, analysis, viewer, reportLab)
+# Run fast unit tests (19 tests covering preproc, analysis, explainability, batch eval, viewer, reportLab)
 python run_tests.py --fast
 
 # Run all tests including the full MONAI SegResNet benchmark test
 python run_tests.py --all
 ```
 
-All 12 core unit tests execute and pass in ~1.4 seconds. Full testing methodology and verified logs are documented in [docs/TESTING.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/TESTING.md).
+All 19 core unit tests execute and pass in ~1.2 seconds. Full testing methodology and verified logs are documented in [docs/TESTING.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/TESTING.md).
 
 ---
 
@@ -225,6 +242,7 @@ All 12 core unit tests execute and pass in ~1.4 seconds. Full testing methodolog
 | :--- | :--- |
 | [docs/SETUP.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/SETUP.md) | Detailed Windows setup, PowerShell execution policy, and dependency configuration |
 | [docs/ARCHITECTURE.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/ARCHITECTURE.md) | Technical architecture, MONAI SegResNet design, sliding-window pipeline, and data flow |
+| [docs/ACADEMIC_AUDIT_AND_SPECIFICATION.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/ACADEMIC_AUDIT_AND_SPECIFICATION.md) | Academic system audit, technical and mathematical specification, explainability, and batch evaluation |
 | [docs/TESTING.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/TESTING.md) | Test commands, execution outputs, benchmark Dice results, and testing scope boundaries |
 | [docs/MENTOR_HANDOVER.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/docs/MENTOR_HANDOVER.md) | Comprehensive mentor handover dossier, file map, known limitations, and roadmap |
 | [models/README.md](file:///c:/Users/thoma/Downloads/BrainTumorAI/models/README.md) | Checkpoint specification, model inputs/outputs, SHA256 checksum, and provenance |
@@ -235,6 +253,8 @@ All 12 core unit tests execute and pass in ~1.4 seconds. Full testing methodolog
 
 - **Investigational Research Prototype:** NeuroVision is developed strictly for academic, educational, and research evaluation. It is **NOT an FDA-cleared or CE-marked medical device**.
 - **No Direct Diagnostic Use:** Segmentation outputs, volumetric measurements, and confidence scores must not be used as primary criteria for surgical resection margins, radiotherapy planning, or clinical treatment decisions without independent certified neuroradiologist review.
+- **Single-Subject Benchmark Scope:** Numerical validation is demonstrated on the bundled benchmark scan (`BraTS-GLI-00000-000`). This demonstrates technical reproducibility but does not constitute clinical trial validation, verified multi-center performance, or population generalizability.
+- **Heuristic Activations vs. Calibrated Uncertainty:** Sigmoid probability heatmaps represent uncalibrated output activations, and boundary entropy maps quantify decision ambiguity ($p \approx 0.5$). Neither provides Bayesian calibrated epistemic uncertainty or proves causal feature attribution.
 - **Preprocessing Assumptions:** The deep learning model expects skull-stripped, co-registered multimodal scans. Unregistered scans, raw unstripped DICOM acquisitions, or severe motion artifacts will degrade boundary accuracy.
 - **Scope of Analysis:** NeuroVision does not predict WHO histopathological grade, predict overall survival, or determine molecular/genetic biomarkers (e.g. IDH mutation, 1p/19q codeletion, MGMT promoter methylation).
 

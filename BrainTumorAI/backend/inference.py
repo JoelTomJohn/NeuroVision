@@ -35,6 +35,8 @@ class InferenceResult(TypedDict, total=False):
     composite: Optional[np.ndarray]
     probabilities: Optional[np.ndarray]
     confidence_map: Optional[np.ndarray]
+    entropy_map: Optional[np.ndarray]
+    explainability: Optional[Dict[str, Any]]
     region_masks: Dict[str, np.ndarray]
     model_info: Dict[str, Any]
 
@@ -229,6 +231,19 @@ def run_segresnet_inference(
         # Maximum predicted confidence proxy across channels
         confidence_map = np.max(probs, axis=0).astype(np.float32)
 
+        # Compute Shannon boundary entropy for decision ambiguity quantification
+        try:
+            from backend import explainability as xai
+            entropy_diag = xai.summarize_explainability_diagnostics(probs, {
+                "WT": pred_wt,
+                "TC": pred_tc,
+                "ET": pred_et,
+            })
+            entropy_map = entropy_diag.get("entropy_map")
+        except Exception:
+            entropy_map = None
+            entropy_diag = {}
+
         return {
             "success": True,
             "is_demo": False,
@@ -237,6 +252,8 @@ def run_segresnet_inference(
             "composite": composite,
             "probabilities": probs,
             "confidence_map": confidence_map,
+            "entropy_map": entropy_map,
+            "explainability": entropy_diag,
             "region_masks": {
                 "WT": pred_wt,
                 "TC": pred_tc,
@@ -322,6 +339,14 @@ def _run_demo_inference(mri_volume: np.ndarray) -> InferenceResult:
         "composite": composite,
         "probabilities": None,
         "confidence_map": confidence_map,
+        "entropy_map": np.zeros(shape, dtype=np.float32),
+        "explainability": {
+            "available": True,
+            "mean_boundary_entropy": 0.08,
+            "peak_boundary_entropy": 0.35,
+            "ambiguity_fraction_pct": 3.8,
+            "interpretability_notice": "Demo mode: synthetic uncertainty placeholder metrics.",
+        },
         "region_masks": {
             "WT": pred_wt,
             "TC": pred_tc,
